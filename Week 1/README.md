@@ -1,0 +1,1 @@
+I think that the code in most (maybe all) of these questions are correct but some doesn't satisfy time limit according to the question.
