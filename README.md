@@ -4,14 +4,14 @@ Implementation of the Deep Compression pipeline (Han et al., ICLR 2016) applied
 to a custom multimodal neural network for 257-class fruit classification on the
 Fruits-360 dataset. The model fuses LBP texture maps, Canny edge maps, and 12
 handcrafted color/shape features — compressed via pruning, quantization, and
-Huffman coding from scratch.
+Huffman coding implemented from scratch.
 
 ---
 
 ## Project Structure
 
 ```
-CNN_Project/
+Final_Project/
 │
 ├── main.py                        # Entry point — runs full pipeline
 ├── config.py                      # Device selection (CUDA / MPS / CPU)
@@ -42,7 +42,8 @@ CNN_Project/
     ├── baseline.npz
     ├── pruned.npz
     ├── quantized.npz
-    └── huffman.npz
+    └── compressed.npz
+
 ```
 
 ---
@@ -56,16 +57,7 @@ pip install torch torchvision opencv-python numpy scikit-learn \
             kagglehub tqdm psutil
 ```
 
-### 2. Set up Kaggle credentials (for dataset download)
-
-```bash
-# Place your kaggle.json in ~/.kaggle/
-mkdir -p ~/.kaggle
-cp kaggle.json ~/.kaggle/
-chmod 600 ~/.kaggle/kaggle.json
-```
-
-### 3. Run the full pipeline
+### 2. Run the full pipeline
 
 ```bash
 python main.py
@@ -80,58 +72,53 @@ This will automatically:
 - Save all 4 models to `compressed_models/`
 - Print the full compression results table
 
-### 4. Running on Google Colab
+### 3. Running on Google Colab
 
 ```python
-# At the top of your Colab notebook
 !pip install kagglehub tqdm psutil opencv-python scikit-learn -q
-
-# Upload kaggle.json then run
-import os
-os.makedirs('/root/.kaggle', exist_ok=True)
-!cp kaggle.json /root/.kaggle/
-!chmod 600 /root/.kaggle/kaggle.json
-
 !python main.py
 ```
 
 ---
 
-## Downloading Pre-trained Models
+## Pre-trained Models
 
-All four compressed models are available on Google Drive:
+All four compressed models are available on Google Drive.
+Download whichever checkpoint you need:
 
 | Model | Description | Size | Link |
 |---|---|---|---|
-| `baseline.npz` | Fully trained, no compression | 49.37 MB | [Download](#) |
-| `pruned.npz` | 99.6% weights pruned + retrained | 5.22 MB | [Download](#) |
-| `quantized.npz` | k=16 quantization + retrained | 5.22 MB | [Download](#) |
-| `huffman.npz` | Huffman coded final model | 0.35 MB | [Download](#) |
+| `baseline.npz` | Fully trained, no compression | 49.37 MB | [Download](https://drive.google.com/file/d/1Lb2fTr3Es_Wk86aL6rO-9fZ91hjpvoJD/view?usp=sharing) |
+| `pruned.npz` | 99.6% weights pruned + retrained | 5.22 MB | [Download](https://drive.google.com/file/d/1mUrhgQFpseZNszXVfT2P3HO82wkSPD29/view?usp=sharing) |
+| `quantized.npz` | k=16 quantization + retrained | 5.22 MB | [Download](https://drive.google.com/file/d/11lSP5Wv9WbJT44zdtFII3PJ3zATAzm3u/view?usp=sharing) |
+| `compressed.npz` | Huffman coded final model | 0.35 MB | [Download](https://drive.google.com/file/d/1iV8nbE-Md2oUhKE0sU7liEzR3jeMJ4Km/view?usp=sharing) |
 
-> **Note:** Replace `[Download](#)` links above with your actual Google Drive
-> sharing links after uploading the files.
-
-### How to upload to Google Drive (from Colab)
-
-```python
-from google.colab import drive
-drive.mount('/content/drive')
-
-import shutil
-shutil.copy('compressed_models/baseline.npz',
-            '/content/drive/MyDrive/CNN_Project/baseline.npz')
-shutil.copy('compressed_models/pruned.npz',
-            '/content/drive/MyDrive/CNN_Project/pruned.npz')
-shutil.copy('compressed_models/quantized.npz',
-            '/content/drive/MyDrive/CNN_Project/quantized.npz')
-shutil.copy('compressed_models/huffman.npz',
-            '/content/drive/MyDrive/CNN_Project/huffman.npz')
-print("All models uploaded.")
-```
 
 ---
 
-## Loading a Pre-trained Model
+## Using a Downloaded Model
+
+### Step 1 — Download the file
+
+Click the Drive link above and save the `.npz` file, or download it directly:
+
+```bash
+pip install gdown
+```
+
+```python
+import gdown
+
+# Get FILE_ID from the Drive share link:
+# https://drive.google.com/file/d/FILE_ID/view
+gdown.download(
+    "https://drive.google.com/uc?id=YOUR_FILE_ID",
+    "compressed_models/quantized.npz",
+    quiet=False
+)
+```
+
+### Step 2 — Load the model
 
 ```python
 import torch
@@ -140,54 +127,70 @@ from utils  import load_model_from_npz
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load any checkpoint — all are interchangeable
 model = cifar_model(num_classes=257).to(device)
 model = load_model_from_npz(model, "compressed_models/quantized.npz", device)
-
 model.eval()
 ```
 
-### Loading from Google Drive (Colab)
+Any of the four `.npz` files can be loaded this way — same code, just change
+the filename.
+
+### Step 3 — Evaluate on the test set
 
 ```python
-import gdown
-
-# Replace FILE_ID with the ID from your Google Drive share link
-# Share link format: https://drive.google.com/file/d/FILE_ID/view
-gdown.download(
-    "https://drive.google.com/uc?id=YOUR_FILE_ID",
-    "compressed_models/quantized.npz",
-    quiet=False
-)
-
-model = cifar_model(num_classes=257).to(device)
-model = load_model_from_npz(model, "compressed_models/quantized.npz", device)
-```
-
-### Running inference
-
-```python
-from data import data_loader
 import os
+import kagglehub
+from data import data_loader
+from utils import test_eval
 
-# Point to your local dataset
-training = "path/to/fruits-360/Training"
-test_dir = "path/to/fruits-360/Test"
+path     = kagglehub.dataset_download("moltean/fruits")
+path     = os.path.join(path, "fruits-360_100x100", "fruits-360")
+training = os.path.join(path, "Training")
+test_dir = os.path.join(path, "Test")
 
 _, test_loader = data_loader(training, test_dir)
-
-# Run evaluation
-from utils import test_eval
 accuracy = test_eval(model, test_loader, device)
 print(f"Accuracy: {accuracy:.2f}%")
+```
+
+### Step 4 — Run inference on a single image
+
+```python
+import cv2
+import torch
+from data.data_loader import (get_lbp, get_canny,
+                               extract_color_features,
+                               extract_shape_features)
+
+def predict(image_path, model, device):
+    img  = cv2.imread(image_path)
+    img  = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img  = cv2.resize(img, (100, 100))
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+    batch = {
+        "lbp": torch.tensor(get_lbp(gray)).unsqueeze(0).unsqueeze(0)
+               .float().to(device) / 255.0,
+        "canny": torch.tensor(get_canny(gray)).unsqueeze(0).unsqueeze(0)
+                 .float().to(device) / 255.0,
+        "color_features": torch.tensor(extract_color_features(img))
+                          .unsqueeze(0).float().to(device),
+        "shape_features": torch.tensor(extract_shape_features(gray))
+                          .unsqueeze(0).float().to(device),
+    }
+
+    with torch.no_grad():
+        pred_idx = model(batch).argmax(dim=1).item()
+
+    return pred_idx
+
+pred = predict("apple.jpg", model, device)
+print(f"Predicted class index: {pred}")
 ```
 
 ---
 
 ## Results
-
-The full pipeline compresses a 49.37 MB model to 0.35 MB with negligible
-accuracy loss:
 
 ```
 ------------------------------------------------------------
@@ -207,13 +210,13 @@ accuracy loss:
   After Pruning (.npz)                   5.22 MB   (89.4% smaller   9.5x)
   After Quantization (.npz)              5.22 MB   (89.4% smaller   9.5x)
   Huffman Compressed (.npz)              0.35 MB   (99.3% smaller 139.3x)
-  Final Compression Ratio               139.3x      ≥9x
+  Final Compression Ratio                139.3x     ≥9x
 
   3. RUNTIME MEMORY
   GPU VRAM Used                         546.8 MB
   RAM Used by Process                  1824.7 MB
   Total Parameters                    19,784,385
-  Weights Pruned             19,708,673 / 19,781,920   (99.6% sparse)
+  Weights Pruned         19,708,673 / 19,781,920   (99.6% sparse)
 
   4. COMPRESSION DETAILS
   Quantization                          k=16 centroids   (~4-bit)
