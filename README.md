@@ -102,22 +102,6 @@ Download whichever checkpoint you need:
 
 Click the Drive link above and save the `.npz` file, or download it directly:
 
-```bash
-pip install gdown
-```
-
-```python
-import gdown
-
-# Get FILE_ID from the Drive share link:
-# https://drive.google.com/file/d/FILE_ID/view
-gdown.download(
-    "https://drive.google.com/uc?id=YOUR_FILE_ID",
-    "compressed_models/quantized.npz",
-    quiet=False
-)
-```
-
 ### Step 2 — Load the model
 
 ```python
